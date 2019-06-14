@@ -85,7 +85,7 @@ if(!$inp){
     }
     catch{
         Write-Host "Wrong input"
-        exit
+        exit 1
     }
 }
 
@@ -94,7 +94,7 @@ if(Test-Path $inp){ # build without including CrtVehicle
     $modelname_found = $inp -match "(\w+)\.mo$"
     if(!$modelname_found){
         Write-Host "Cannot infer model name"
-        exit
+        exit 2
     }
     $filename = $inp;
     $modelname = $matches[1]
@@ -139,7 +139,7 @@ if(Test-Path $inp){ # build without including CrtVehicle
         }
         else {
             Write-Host "Bad -inp argument"
-            exit
+            exit 1
         }
     }
 }
@@ -147,3 +147,4 @@ if(Test-Path $inp){ # build without including CrtVehicle
 if(!$donotnotify){
     [System.Windows.MessageBox]::Show("Build of $shortmodelname complete", 'Build Status')
 }
+exit 0

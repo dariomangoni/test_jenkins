@@ -3,8 +3,7 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                powershell ''
-                powershell '.\\build.ps1 (Get-Item -Path ".\\TrivialTest.mo").FullName -donotnotify'
+                powershell '.\\build.ps1 (Get-Item -Path ".\\TrivialTestERROR.mo").FullName -donotnotify'
             }
         }
     }
