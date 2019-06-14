@@ -3,7 +3,8 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                powershell '.\\myPsScript.ps1'
+                powershell ''
+                powershell '.\\build.ps1 (Get-Item -Path ".\\TrivialTest.mo").FullName -donotnotify'
             }
         }
     }
