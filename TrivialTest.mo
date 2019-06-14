@@ -7,4 +7,4 @@ equation
   y = outVal;
 annotation(
     uses(Modelica(version = "3.2.3")));
-end TrivialTest;
+end TrivialTestERROR;
