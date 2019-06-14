@@ -3,7 +3,7 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                powershell '.\myPsScript.ps1'
+                powershell '.\\myPsScript.ps1'
             }
         }
     }
