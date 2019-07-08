@@ -14,12 +14,6 @@ function prepareBuildEnv([string]$workfolder = $(Mandatory=$true)){
 }
 
 function loadModelicaFile([string]$scriptfile = $(Mandatory=$true), [string]$filename = $(Mandatory=$true)){
-    if ($donotnotify){
-        Add-Content $scriptfile 'echo(false);'
-    }
-    else{
-        Add-Content $scriptfile 'echo(true);'
-    }
     Add-Content $scriptfile 'loadModel(Modelica);'
     Add-Content $scriptfile -value('loadFile("'+$filename+'");')
 }
@@ -48,16 +42,20 @@ function getErrorOnReturn(){
 
 function runOpenModelicaScript([string]$workfolder = $(Mandatory=$true), [string]$shortmodelname = $(Mandatory=$true)){
     $stopWatch = [system.diagnostics.stopwatch]::StartNew();
-    Start-Process -FilePath "$env:OPENMODELICAHOME\bin\omc.exe" -ArgumentList "-d=initialization,infoXmlOperations,graphml,visxml,aliasConflicts,stateselection,bltmatrixdump build.mos" -WorkingDirectory $workfolder -NoNewWindow -Wait
+    $OmcProcess = Start-Process -FilePath "$env:OPENMODELICAHOME\bin\omc.exe" -ArgumentList "-d=initialization,infoXmlOperations,graphml,visxml,aliasConflicts,stateselection,bltmatrixdump build.mos" -WorkingDirectory $workfolder -NoNewWindow -Wait -PassThru
     Write-Host "Elapsed time:" $stopWatch.Elapsed.TotalSeconds "s"
+    return $OmcProcess.ExitCode
 }
 
 function runOpenModelicaScriptFMU([string]$workfolder = $(Mandatory=$true), [string]$shortmodelname = $(Mandatory=$true)){
-    Start-Process -FilePath "$env:OPENMODELICAHOME\bin\omc.exe" -ArgumentList "-d=aliasConflicts build.mos" -WorkingDirectory $workfolder -Wait -NoNewWindow
+    $stopWatch = [system.diagnostics.stopwatch]::StartNew();
+    $OmcProcess = Start-Process -FilePath "$env:OPENMODELICAHOME\bin\omc.exe" -ArgumentList "-d=aliasConflicts build.mos" -WorkingDirectory $workfolder -PassThru -Wait -NoNewWindow
+    Write-Host "Elapsed time:" $stopWatch.Elapsed.TotalSeconds "s"
     Remove-Item -Path $workfolder$shortmodelname -ErrorAction Ignore -Force -Recurse
     New-Item -Path $workfolder$shortmodelname -ItemType Directory -Force | Out-Null
     [System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $workfolder$shortmodelname'.fmu'), (Resolve-Path $workfolder$shortmodelname))
     Start-Process -FilePath "tools\fmuCheck.win64" -ArgumentList "-o nul -l 3 $shortmodelname.fmu" -WorkingDirectory $workfolder -Wait -NoNewWindow
+    return $OmcProcess.ExitCode
 }
 
 # main script
@@ -123,7 +121,7 @@ if(Test-Path $inp){ # build without including CrtVehicle
         loadModelicaFile -scriptfile $scriptfile -filename $filename
         buildModelFMU -modelname $modelname -shortmodelname $shortmodelname
         getErrorOnReturn
-        runOpenModelicaScriptFMU -workfolder $workfolder -shortmodelname $shortmodelname
+        $omcerrorflag = runOpenModelicaScriptFMU -workfolder $workfolder -shortmodelname $shortmodelname
     }else{ #noAltair compile
         Write-Host "Building noAltair executable"
         $workfolder = "_build_temp\$shortmodelname\"
@@ -131,7 +129,7 @@ if(Test-Path $inp){ # build without including CrtVehicle
         loadModelicaFile -scriptfile $scriptfile -filename $filename
         buildModel -modelname $modelname -shortmodelname $shortmodelname
         getErrorOnReturn
-        runOpenModelicaScript -workfolder $workfolder -shortmodelname $shortmodelname
+        $omcerrorflag = runOpenModelicaScript -workfolder $workfolder -shortmodelname $shortmodelname
     }
 } else {
     $script:CrtVehicle_found = $inp -match "CrtVehicle"
@@ -146,21 +144,15 @@ if(Test-Path $inp){ # build without including CrtVehicle
                 prepareBuildEnv -workfolder $workfolder
                 loadAltairLibrary -scriptfile $scriptfile
                 buildModelFMU -modelname $modelname -shortmodelname $shortmodelname
-                runOpenModelicaScriptFMU -workfolder $workfolder -shortmodelname $shortmodelname
+                $omcerrorflag = runOpenModelicaScriptFMU -workfolder $workfolder -shortmodelname $shortmodelname
             }else{ #Altair compile
                 Write-Host "Building Altair executable"
                 $workfolder = "_build_temp\$shortmodelname\"
                 prepareBuildEnv -workfolder $workfolder
                 loadAltairLibrary -scriptfile $scriptfile
                 buildModel -modelname $modelname -shortmodelname $shortmodelname
-                runOpenModelicaScript -workfolder $workfolder -shortmodelname $shortmodelname
+                $omcerrorflag = runOpenModelicaScript -workfolder $workfolder -shortmodelname $shortmodelname
             }
-
-            if(!$donotnotify){
-                [System.Windows.MessageBox]::Show("Build of $shortmodelname complete", 'Build Status')
-            }
-
-            exit $LASTEXITCODE
         }
         else { # if no model has been found
             Write-Host "Bad -inp argument"
@@ -168,4 +160,10 @@ if(Test-Path $inp){ # build without including CrtVehicle
         }
     }
 }
+
+if(!$donotnotify){
+    [System.Windows.MessageBox]::Show("Build of $shortmodelname complete", 'Build Status')
+}
+
+exit $omcerrorflag
 
