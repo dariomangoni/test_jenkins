@@ -14,6 +14,12 @@ function prepareBuildEnv([string]$workfolder = $(Mandatory=$true)){
 }
 
 function loadModelicaFile([string]$scriptfile = $(Mandatory=$true), [string]$filename = $(Mandatory=$true)){
+    if ($donotnotify){
+        Add-Content $scriptfile 'echo(false);'
+    }
+    else{
+        Add-Content $scriptfile 'echo(true);'
+    }
     Add-Content $scriptfile 'loadModel(Modelica);'
     Add-Content $scriptfile -value('loadFile("'+$filename+'");')
 }
@@ -25,13 +31,19 @@ function loadAltairLibrary([string]$scriptfile = $(Mandatory=$true)){
 }
 
 function buildModelFMU([string]$modelname = $(Mandatory=$true), [string]$shortmodelname = $(Mandatory=$true)){
-    Add-Content $scriptfile -value('buildModelFMU('+$modelname+', version="2.0", fileNamePrefix="'+$shortmodelname+'", fmuType="cs", platforms={"static"}, includeResources=true);')
+    Add-Content $scriptfile -value('res:=buildModelFMU('+$modelname+', version="2.0", fileNamePrefix="'+$shortmodelname+'", fmuType="cs", platforms={"static"}, includeResources=true);')
     Add-Content $scriptfile 'getErrorString();'
 }
 
 function buildModel([string]$modelname = $(Mandatory=$true), [string]$shortmodelname = $(Mandatory=$true)){
-    Add-Content $scriptfile -value('buildModel('+$modelname+', fileNamePrefix="'+$shortmodelname+'", startTime=0, stopTime=1, numberOfIntervals=1000, tolerance=1e-5, method="dassl", variableFilter=".*", cflags="", outputFormat="mat", simflags="-lv=LOG_STATS,LOG_SIMULATION");')
+    Add-Content $scriptfile -value('res:=buildModel('+$modelname+', fileNamePrefix="'+$shortmodelname+'", startTime=0, stopTime=1, numberOfIntervals=1000, tolerance=1e-5, method="dassl", variableFilter=".*", cflags="", outputFormat="mat", simflags="-lv=LOG_STATS,LOG_SIMULATION");')
     Add-Content $scriptfile 'getErrorString();'
+}
+
+function getErrorOnReturn(){
+    Add-Content $scriptfile 'fileexist:=regularFileExists(res[1]+".exe");'
+    Add-Content $scriptfile 'exitval:= if fileexist then 0 else 1;'
+    Add-Content $scriptfile 'exit(exitval);'
 }
 
 function runOpenModelicaScript([string]$workfolder = $(Mandatory=$true), [string]$shortmodelname = $(Mandatory=$true)){
@@ -53,7 +65,11 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type -AssemblyName PresentationFramework
 
 # if $inp has been left empty, the user is asked to choose from the classes contained into CrtVehicleTesting
-if(!$inp){
+if([string]::IsNullOrEmpty($inp)){
+    if ($donotnotify){
+        Write-Host "Wrong input"
+        exit 1
+    }
     Write-Host "No input is provided; looking into CrtVehicleTesting classes..."
     # prepare the MOS file to get the classes names
     $parseFilename = 'parseLibrary.mos';
@@ -89,6 +105,7 @@ if(!$inp){
     }
 }
 
+
 $inp = $inp -replace '\\', '/'
 if(Test-Path $inp){ # build without including CrtVehicle
     $modelname_found = $inp -match "(\w+)\.mo$"
@@ -105,6 +122,7 @@ if(Test-Path $inp){ # build without including CrtVehicle
         prepareBuildEnv -workfolder $workfolder
         loadModelicaFile -scriptfile $scriptfile -filename $filename
         buildModelFMU -modelname $modelname -shortmodelname $shortmodelname
+        getErrorOnReturn
         runOpenModelicaScriptFMU -workfolder $workfolder -shortmodelname $shortmodelname
     }else{ #noAltair compile
         Write-Host "Building noAltair executable"
@@ -112,6 +130,7 @@ if(Test-Path $inp){ # build without including CrtVehicle
         prepareBuildEnv -workfolder $workfolder
         loadModelicaFile -scriptfile $scriptfile -filename $filename
         buildModel -modelname $modelname -shortmodelname $shortmodelname
+        getErrorOnReturn
         runOpenModelicaScript -workfolder $workfolder -shortmodelname $shortmodelname
     }
 } else {
@@ -121,14 +140,14 @@ if(Test-Path $inp){ # build without including CrtVehicle
         $shortmodelname_found = $modelname -match "\.(\w+)$"
         if($shortmodelname_found){
             $shortmodelname = $matches[1]
-            if($fmu){
+            if($fmu){ #Altair FMU
                 Write-Host "Building Altair FMU"
                 $workfolder = "_fmu_temp\$shortmodelname\"
                 prepareBuildEnv -workfolder $workfolder
                 loadAltairLibrary -scriptfile $scriptfile
                 buildModelFMU -modelname $modelname -shortmodelname $shortmodelname
                 runOpenModelicaScriptFMU -workfolder $workfolder -shortmodelname $shortmodelname
-            }else{
+            }else{ #Altair compile
                 Write-Host "Building Altair executable"
                 $workfolder = "_build_temp\$shortmodelname\"
                 prepareBuildEnv -workfolder $workfolder
@@ -136,15 +155,17 @@ if(Test-Path $inp){ # build without including CrtVehicle
                 buildModel -modelname $modelname -shortmodelname $shortmodelname
                 runOpenModelicaScript -workfolder $workfolder -shortmodelname $shortmodelname
             }
+
+            if(!$donotnotify){
+                [System.Windows.MessageBox]::Show("Build of $shortmodelname complete", 'Build Status')
+            }
+
+            exit $LASTEXITCODE
         }
-        else {
+        else { # if no model has been found
             Write-Host "Bad -inp argument"
             exit 1
         }
     }
 }
 
-if(!$donotnotify){
-    [System.Windows.MessageBox]::Show("Build of $shortmodelname complete", 'Build Status')
-}
-exit 0
