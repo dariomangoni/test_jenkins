@@ -1,0 +1,16 @@
+// MSL regression testing suite:
+setCommandLineOptions("-d=nogen,initialization,backenddaeinfo,discreteinfo,stateselection");
+setMatchingAlgorithm("PFPlusExt");
+setIndexReductionMethod("dynamicStateSelection");
+
+simFlags := "-abortSlowSimulation -alarm=480 -lv LOG_STATS";
+// setModelicaPath("/home/marsj/dev/v3.2.1+build.2.release");
+referenceFileExtension:="csv";
+referenceFileNameDelimiter:="/";
+// referenceFiles:="/path/to/RegressionTesting/ModelicaStandardLibrary/ReferenceResults/v3.2.1+build.2.release/";
+outputFormat:="csv";
+customLibrary:=false;
+ModelicaLibrary:=$TypeName(Modelica);
+ModelicaLibraryVersion:="default";
+// mslRegressionOutput:="RegressionTest"; // Creates files under ./RegressionTest
+mslRegressionOutput:=""; // Creates files under ./RegressionTest
