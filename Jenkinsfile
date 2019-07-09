@@ -3,7 +3,8 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                powershell '.\\build.ps1 (Get-Item -Path ".\\TrivialTest.mo").FullName -donotnotify'
+                cmd 'cd CI'
+                cmd 'C:/OpenModelica/bin/omc -g=MetaModelica BuildModelRecursive.mos'
             }
         }
     }

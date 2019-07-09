@@ -4,6 +4,10 @@ echo(false);
 settings := checkSettings();
 configure := settings.CONFIGURE_CMDLINE;
 onlyExperiments := false;
+system("rd /s /q workdir");
+system("mkdir workdir");
+cd("workdir");
+
 customCommandsPath:="../CustomCommands.mos";
 if 0 == system("lsb_release -ds > lsb.release") then
   system("uname -p > arch");
@@ -70,10 +74,6 @@ reference_rangeDelta:=1e-3;
 print("Loading Modelica library...\n");
 print(ModelicaLibrary);
 loadModel(ModelicaLibrary,{ModelicaLibraryVersion});
-print("Loading additional libraries: \n" + sum(myLib + "\n" for myLib in additionalLibraries));
-print("\n");
-{loadFile(myLib) for myLib in additionalLibraries};
-getErrorString();
 ModelicaLibraryVersionRevision:=getVersion(ModelicaLibrary);
 libraryLastChange:="";
 // print(sum(getSourceFile(l) + "\n" for l in getClassNames()));
@@ -87,16 +87,19 @@ libraryLastChange:="";
 ModelicaLibraryVersionRevision := (if ModelicaLibraryVersionRevision == "" then ModelicaLibraryVersion else ModelicaLibraryVersionRevision);
 ModelicaLibraryString:=typeNameString(ModelicaLibrary);
 
-system("date /t > tmp.date");
-system("time /t >> tmp.date");
-dateAndTime:=readFile("tmp.date");
-system("del /f tmp.date");
 
-loadModelCommand:="\n"+customCommands+"\nloadModel("+ModelicaLibraryString+",{\""+ModelicaLibraryVersion+"\"});\n";
-loadAdditionalLibraryCommand:=sum("\nloadFile(\""+myLib+"\");getErrorString();\n" for myLib in additionalLibraries);
+// Load additional libraries
+print("Loading additional libraries: \n" + sum(myLib + "\n" for myLib in additionalLibraries));
+print("\n");
+loadAllLibRes:={loadFile(myLib) for myLib in additionalLibraries};
+getErrorString();
 
-omc:=getInstallationDirectoryPath()+"/bin/omc";
-dygraphs:=getInstallationDirectoryPath()+"/share/doc/omc/testmodels/dygraph-combined.js";
+for loadLibRes in loadAllLibRes loop
+  if not loadLibRes then
+    exit(2);
+  end if;
+end for;
+
 
 /*
 * Get Classes to be built and run
@@ -111,6 +114,17 @@ getErrorString();
 print("Tests to be run ("+ String(size(classesToRun,1))+"): \n"+ sum(s + "\n" for s in classesToRun));
 
 print("Creating MOS file for each test...\n");
+
+system("date /t > tmp.date");
+system("time /t >> tmp.date");
+dateAndTime:=readFile("tmp.date");
+system("del /f tmp.date");
+
+loadModelCommand:="\n"+customCommands+"\nloadModel("+ModelicaLibraryString+",{\""+ModelicaLibraryVersion+"\"});\n";
+loadAdditionalLibraryCommand:=sum("\nloadFile(\""+myLib+"\");getErrorString();\n" for myLib in additionalLibraries);
+
+omc:=getInstallationDirectoryPath()+"/bin/omc";
+dygraphs:=getInstallationDirectoryPath()+"/share/doc/omc/testmodels/dygraph-combined.js";
 
 system("del /f *.o");
 system("del /f *.c");
