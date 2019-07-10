@@ -4,7 +4,7 @@ pipeline {
         stage('Build') {
             steps {
                 sh 'cd CI'
-                sh '/c/OpenModelica/bin/omc -g=MetaModelica BuildModelRecursive.mos'
+                sh '/c/OpenModelica/bin/omc -g=MetaModelica CI/BuildModelRecursive.mos'
             }
         }
     }
