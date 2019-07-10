@@ -1,6 +1,6 @@
 // Note: Run with -g=MetaModelica
 // Some examples of CustomCommands.mos files are at the bottom of this file
-echo(false);
+echo(true);
 
 buildOnWindows:=true;
 if buildOnWindows then
@@ -113,6 +113,7 @@ getErrorString();
 
 for loadLibRes in loadAllLibRes loop
   if not loadLibRes then
+    print("Failed to load additional libraries\n");
     exit(2);
   end if;
 end for;
