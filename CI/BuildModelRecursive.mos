@@ -1,12 +1,29 @@
 // Note: Run with -g=MetaModelica
 // Some examples of CustomCommands.mos files are at the bottom of this file
 echo(false);
+
+buildOnWindows:=true;
+if buildOnWindows then
+  removeDirComm:="rd /s /q ";
+  removeFileComm:="del /f ";
+  touchComm:="type nul > ";
+  dateComm:="date /t ";
+  timeComm:="time /t ";
+else
+  removeDirComm:="rm -rf ";
+  removeFileComm:="rm -f ";
+  touchComm:="touch ";
+  dateComm:="date /t ";
+  timeComm:="time /t ";
+end if;
+
+
 settings := checkSettings();
 configure := settings.CONFIGURE_CMDLINE;
 onlyExperiments := false;
-system("rd /s /q workdir");
-system("mkdir workdir");
-cd("workdir");
+system(removeDirComm+ "CI/workdir");
+system("mkdir CI/workdir");
+cd("CI/workdir");
 
 customCommandsPath:="../CustomCommands.mos";
 if 0 == system("lsb_release -ds > lsb.release") then
@@ -118,7 +135,7 @@ print("Creating MOS file for each test...\n");
 system("date /t > tmp.date");
 system("time /t >> tmp.date");
 dateAndTime:=readFile("tmp.date");
-system("del /f tmp.date");
+system(removeFileComm+"tmp.date");
 
 loadModelCommand:="\n"+customCommands+"\nloadModel("+ModelicaLibraryString+",{\""+ModelicaLibraryVersion+"\"});\n";
 loadAdditionalLibraryCommand:=sum("\nloadFile(\""+myLib+"\");getErrorString();\n" for myLib in additionalLibraries);
@@ -126,12 +143,11 @@ loadAdditionalLibraryCommand:=sum("\nloadFile(\""+myLib+"\");getErrorString();\n
 omc:=getInstallationDirectoryPath()+"/bin/omc";
 dygraphs:=getInstallationDirectoryPath()+"/share/doc/omc/testmodels/dygraph-combined.js";
 
-system("del /f *.o");
-system("del /f *.c");
-system("del /f *.h");
-system("rd /s /q "+ModelicaLibraryString+"*");
-system("rd /s /q "+classNamesFilterTypeName+"*");
-system("rd /s /q files/ "+log);
+system(removeFileComm+"*.o");
+system(removeFileComm+"*.c");
+system(removeFileComm+"*.h");
+system(removeDirComm+typeNameString(classNamesFilterTypeName)+"*");
+system(removeDirComm+"files/"+log);
 mkdir("files");
 
 /*** This is the stuff executed for each model ***/
@@ -253,7 +269,7 @@ simFile:=\"files/"+s+".sim\";
 (nmessage,nerror,nwarning) := countMessages();
 errorLinkClass := if nerror>0 then \"messagesError\" elseif nwarning>0 then \"messagesWarning\" else \"messagesInfo\";
 err:=getErrorString();
-system(\"del /f \" + errFile);
+system(\""+removeFileComm+"\" + errFile);
 writeFile(simFile,\"\");
 if err <> \"\" then
   writeFile(errFile,err);
@@ -290,15 +306,15 @@ if mslRegressionOutput <> \"\" and referenceExists then
   buildFailLog := mslRegressionOutput+\"translate_failed.log\";
   buildSuccessLog := mslRegressionOutput+\"translate_success.log\";
 
-  system(\"del /f \"+(if simRes then simFailLog else simSuccessLog));
-  system(\"del /f \"+(if buildRes then buildFailLog else buildSuccessLog));
+  system(\""+removeFileComm+"\"+(if simRes then simFailLog else simSuccessLog));
+  system(\""+removeFileComm+"\"+(if buildRes then buildFailLog else buildSuccessLog));
 
   system(\"cp \"+simFile+\" \" + simFile + \".tmp\");
   if simRes then
     system(\"cp \"+resFile+\" "+s+".csv\");
     compareFilesAndMove(\""+s+".csv\", mslRegressionOutput+\""+s+".csv\");
   else
-    system(\"del /f \" + mslRegressionOutput + \""+s+".csv\");
+    system(\""+removeFileComm+"\" + mslRegressionOutput + \""+s+".csv\");
   end if;
   system(\"cp "+s+".mos "+s+".mos.tmp\");
 
@@ -317,7 +333,7 @@ system(\"sed -i '300,$ d' '\" + simFile + \"'\"); // Only keep the top 300 lines
 timeSim := OpenModelica.Scripting.Internal.Time.timerTock(OpenModelica.Scripting.Internal.Time.RT_CLOCK_USER_RESERVED);
 
 if simRes then
-  system(\"type nul > "+s+".simsuccess\");
+  system(\""+touchComm+s+".simsuccess\");
   prefix := \"files/"+s+".diff\";
   if referenceExists then
     OpenModelica.Scripting.Internal.Time.timerTick(OpenModelica.Scripting.Internal.Time.RT_CLOCK_USER_RESERVED);
@@ -329,7 +345,7 @@ if simRes then
       writeFile(errFile, \"\\nVariables in the result:\"+sum(var+\",\" for var in OpenModelica.Scripting.readSimulationResultVars(resFile))+\"\\n\" + errVerify, append=true);
     end if;
     if referenceOK then
-      system(\"type nul > "+s+".verifysuccess\");
+      system(\""+touchComm+s+".verifysuccess\");
     end if;
     timeDiff := OpenModelica.Scripting.Internal.Time.timerTock(OpenModelica.Scripting.Internal.Time.RT_CLOCK_USER_RESERVED);
     diffFiles := {prefix + \".\" + var for var in diffVars};
@@ -420,7 +436,7 @@ results := system_parallel({omc + " +n=1 " + s + ".mos" for s in classesToRun});
 print(getErrorString());
 
 print("Creating HTML report...\n");
-system("del /f " + log);
+system(removeFileComm+log);
 nsucceeded := String(sum(if OpenModelica.Scripting.regularFileExists(s + ".exe") then 1 else 0 for s in classesToRun)) + "/" + String(size(classesToRun,1));
 nsimsucceeded := String(sum(if OpenModelica.Scripting.regularFileExists(s + ".simsuccess") then 1 else 0 for s in classesToRun)) + "/" + String(size(classesToRun,1));
 nverifysucceeded := String(sum(if OpenModelica.Scripting.regularFileExists(s + ".verifysuccess") then 1 else 0 for s in classesToRun)) + "/" + String(size(classesToRun,1));
@@ -459,7 +475,7 @@ writeFile("files/" + typeNameString(ModelicaLibrary) + ".classes",sum(typeNameSt
 // {system("iconv -f utf8 -t utf8 -c BuildModelRecursive." + phase + ".xml.tmp -o BuildModelRecursive." + phase + ".xml") for phase in {"flat","compile","sim","verify"}};getErrorString();
 
 system("cp '" + dygraphs + "' files/");getErrorString();
-// system("del /f tidy.err; for f in files/*.err; do (grep -v 'Duplicate modification of element' $f | sed s,^.*omlibrary/,[, | grep -v 'Error building simulator' | grep -v 'has no value, and is fixed during initialization' | grep -5E '(Warning|Error|Notification):' > tmp.tidy && test -s tmp.tidy && (basename $f && cat tmp.tidy)) >> tidy.err; done");
+// system(removeFileComm+"tidy.err; for f in files/*.err; do (grep -v 'Duplicate modification of element' $f | sed s,^.*omlibrary/,[, | grep -v 'Error building simulator' | grep -v 'has no value, and is fixed during initialization' | grep -5E '(Warning|Error|Notification):' > tmp.tidy && test -s tmp.tidy && (basename $f && cat tmp.tidy)) >> tidy.err; done");
 // system("chmod -R go+r BuildModelRecursive.html files tidy.err");getErrorString();
 // system("chmod go+x files");getErrorString();
 system("tar czf BuildModelRecursive.tar.gz BuildModelRecursive.html files");getErrorString();
