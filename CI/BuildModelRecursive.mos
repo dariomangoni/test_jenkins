@@ -89,7 +89,7 @@ reference_reltolDiffMinMax:=3e-3;
 reference_rangeDelta:=1e-3;
 
 print("Loading Modelica library...\n");
-print(ModelicaLibrary);
+print(typeNameString(ModelicaLibrary));
 loadModel(ModelicaLibrary,{ModelicaLibraryVersion});
 ModelicaLibraryVersionRevision:=getVersion(ModelicaLibrary);
 libraryLastChange:="";
