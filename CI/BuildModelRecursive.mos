@@ -2,6 +2,7 @@
 // Some examples of CustomCommands.mos files are at the bottom of this file
 echo(false);
 
+
 buildOnWindows:=true;
 if buildOnWindows then
   removeDirComm:="rd /s /q ";
@@ -18,11 +19,10 @@ end if;
 
 settings := checkSettings();
 configure := settings.CONFIGURE_CMDLINE;
-onlyExperiments := false;
-system(removeDirComm+ "CI/workdir");
-system("mkdir CI/workdir");
-print("Current dir is "+cd()+"\n");
 currentDir:=cd();
+system(removeDirComm+"\""+currentDir+"CI/workdir\"");
+system("mkdir \""+currentDir+"/CI/workdir\"");
+print("Current dir is "+cd()+"\n");
 cd(currentDir+"/CI/workdir");
 print("Working directory: "+cd()+"\n");
 
@@ -55,35 +55,29 @@ referenceFileExtension:="csv";
 referenceFileNameDelimiter:=".";
 
 sortFiles:=true;
-ulimitOmc:="660"; // 11 minutes to generate the C-code
-ulimitExe:="480"; // 8 additional minutes to initialize and run the simulation
+ulimitOmc:="900"; // 15 minutes to generate the C-code
+ulimitExe:="600"; // 10 additional minutes to initialize and run the simulation
 ulimitMemory:="16000000";  // ~16GB memory at most
 extraSimFlags:=""; // no extra sim flags
 javascript := false;
-customLibrary := false;
+customModelicaLibrary := false;
 
 runScript(customCommandsPath);
 
 simFlags:="-abortSlowSimulation -alarm=" + ulimitExe;
 simFlags:=simFlags + " " + extraSimFlags;
 
-customCommandsStr := if regularFileExists(customCommandsPath) then ("Flags: <pre>" + escapeXML(readFile(customCommandsPath)) + "</pre>") else "";
+customCommandsStr := if regularFileExists(customCommandsPath) then ("<strong>Loaded custom commands from: \""+customCommandsPath+"\"</strong>") else "";
 
-if not customLibrary then
-// It is possible to change ModelicaLibrary in CustomCommands.mos only if customLibrary := true is set
+if not customModelicaLibrary then
+// It is possible to change ModelicaLibrary in CustomCommands.mos only if customModelicaLibrary := true is set
 ModelicaLibrary:=$TypeName(Modelica);
 ModelicaLibraryVersion:="default";
 end if;
 
-// MyLibrary configuration
-// additionalLibraries:={"../../MyModelicaLibrary/package.mo", "../../MyModelicaLibrary/package.mo"};
-additionalLibraries:={"../../MyModelicaLibrary/package.mo"};
-classNamesFilterTypeName:=$TypeName(MyModelicaLibrary);
-
-
 setCommandLineOptions({"-g=Modelica","-d=nogen"});
 OpenModelica.Scripting.Internal.Time.timerTick(OpenModelica.Scripting.Internal.Time.RT_CLOCK_USER_RESERVED);
-log:="BuildModelRecursive.html";
+logFile:="report/BuildModelRecursive.html";
 default_tolerance:=1e-6;
 reference_reltol:=3e-3;
 reference_reltolDiffMinMax:=3e-3;
@@ -106,6 +100,9 @@ ModelicaLibraryString:=typeNameString(ModelicaLibrary);
 
 
 // Load additional libraries
+additionalLibraries:={"../../MyModelicaLibrary/package.mo"};
+testClassNames:=$TypeName(MyModelicaLibrary);
+
 print("Loading additional libraries: \n" + sum(myLib + "\n" for myLib in additionalLibraries));
 print("\n");
 loadAllLibRes:={loadFile(myLib) for myLib in additionalLibraries};
@@ -125,7 +122,7 @@ end for;
 
 // classesToRun:={typeNameString(x) for x guard not isPartial(x) in getClassNames(class_=ModelicaLibrary,recursive=true,sort=sortFiles)};
 print("Evaluating models to be considered for the test...\n");
-classesToRun:={typeNameString(x) for x guard isExperiment(x) in getClassNames(class_=classNamesFilterTypeName,recursive=true,sort=sortFiles)};
+classesToRun:={typeNameString(x) for x guard isExperiment(x) in getClassNames(class_=testClassNames,recursive=true,sort=sortFiles)};
 getErrorString();
 
 // writeFile("x",sum(s + "\n" for s in classesToRun));
@@ -153,9 +150,9 @@ dygraphs:=getInstallationDirectoryPath()+"/share/doc/omc/testmodels/dygraph-comb
 system(removeFileComm+"*.o");
 system(removeFileComm+"*.c");
 system(removeFileComm+"*.h");
-system(removeDirComm+typeNameString(classNamesFilterTypeName)+"*");
-system(removeDirComm+"files/"+log);
-mkdir("files");
+system(removeDirComm+typeNameString(testClassNames)+"*");
+system(removeDirComm+"report");
+mkdir("report");
 
 /*** This is the stuff executed for each model ***/
 min(writeFile(s + ".mos",settingsStr + "
@@ -171,7 +168,7 @@ function cell
   input String mdFile := \\\"\\\";
   output String str;
 algorithm
-  str := if mdFile == \\\"\\\" then \\\"\\\" else \\\" <a href=\\\\\\\"files/mdpad_local.html?\\\"+mdFile+\\\"\\\\\\\"><img width=\\\\\\\"16px\\\\\\\" src=\\\\\\\"files/Modelica.Icons.Example.svg\\\\\\\"></img></a>\\\";
+  str := if mdFile == \\\"\\\" then \\\"\\\" else \\\" <a href=\\\\\\\"mdpad_local.html?\\\"+mdFile+\\\"\\\\\\\"><img width=\\\\\\\"16px\\\\\\\" src=\\\\\\\"Modelica.Icons.Example.svg\\\\\\\"></img></a>\\\";
   str := if elapsedTime==-1.0 then \\\"<td bgcolor=\\\\\\\"#FF0000\\\\\\\">&nbsp;</td>\\\" else ((if greenOnOk then \\\"<td bgcolor=\\\\\\\"\\\" + greenColor + \\\"\\\\\\\">\\\" else \\\"<td>\\\") +
     OpenModelica.Scripting.Internal.Time.readableTime(elapsedTime)+str+\\\"</td>\\\");
 end cell;
@@ -207,13 +204,13 @@ algorithm
 end testcase;
 \");getErrorString();
 statFile := \""+s+".stat\";
-writeFile(\""+log+"\",\""+s+"\n\",append=true);
+writeFile(\""+logFile+"\",\""+s+"\n\",append=true);
 writeFile(statFile,\"<tr><td bgcolor=\\\"#ff0000\\\">"+s+"</td></tr>\");getErrorString();
 writeFile(statFile + \".flat\", testcase(0,false,\"killed\"));getErrorString();
 writeFile(statFile + \".compile\", testcase(0,false,\"killed\"));getErrorString();
 writeFile(statFile + \".sim\", testcase(0,false,\"killed\"));getErrorString();
 writeFile(statFile + \".verify\", testcase(0,false,\"killed\"));getErrorString();
-writeFile(\"files/" + s + ".uses\", \"\");getErrorString();
+writeFile(\"report/" + s + ".uses\", \"\");getErrorString();
 
 outputFormat:=\"default\";
 javascript:="+String(javascript)+";
@@ -260,7 +257,7 @@ else
   emit_protected := \"\";
 end if;
 
-writeFile(\"files/" + s + ".uses\", sum(typeNameString(c) + \"\n\" for c in OpenModelica.Scripting.getUsedClassNames("+s+")));getErrorString();
+writeFile(\"report/" + s + ".uses\", sum(typeNameString(c) + \"\n\" for c in OpenModelica.Scripting.getUsedClassNames("+s+")));getErrorString();
 
 // Use twice as many output points as the experiment annotation suggests. Else aim for 5000 points.
 (startTime,stopTime,tolerance,numberOfIntervals,stepSize):=getSimulationOptions("+s+",defaultTolerance="+String(default_tolerance)+",defaultNumberOfIntervals=2500);
@@ -271,8 +268,8 @@ res:=buildModel("+s+",tolerance=tolerance,outputFormat=outputFormat,numberOfInte
 alarm(0);
 
 greenColor := \"#00FF00\";
-errFile:=\"files/"+s+".err\";
-simFile:=\"files/"+s+".sim\";
+errFile:=\"report/"+s+".err\";
+simFile:=\"report/"+s+".sim\";
 (nmessage,nerror,nwarning) := countMessages();
 errorLinkClass := if nerror>0 then \"messagesError\" elseif nwarning>0 then \"messagesWarning\" else \"messagesInfo\";
 err:=getErrorString();
@@ -299,7 +296,7 @@ OpenModelica.Scripting.Internal.Time.timerTick(OpenModelica.Scripting.Internal.T
 buildRes := res[1] <> \"\";
 simRes  := if not buildRes then false else 0 == system(\""+startScript+s+" \"+simFlags+emit_protected+\" > \"+simFile+\" 2>&1\");
 if buildRes and javascript then
-  system(\"cp " + s + ".js " + s + "_info.xml " + s + "_init.xml " + s + ".md files/\");
+  system(\"cp " + s + ".js " + s + "_info.xml " + s + "_init.xml " + s + ".md report/\");
 end if;
 mdFile := if javascript then \""+s+".md\" else \"\";
 
@@ -341,7 +338,7 @@ timeSim := OpenModelica.Scripting.Internal.Time.timerTock(OpenModelica.Scripting
 
 if simRes then
   system(\""+touchComm+s+".simsuccess\");
-  prefix := \"files/"+s+".diff\";
+  prefix := \"report/"+s+".diff\";
   if referenceExists then
     OpenModelica.Scripting.Internal.Time.timerTick(OpenModelica.Scripting.Internal.Time.RT_CLOCK_USER_RESERVED);
     getErrorString();
@@ -359,8 +356,8 @@ if simRes then
     // Create a file containing only the calibrated variables, for easy display
     if not referenceOK then
       timeDiff := OpenModelica.Scripting.Internal.Time.timerTock(OpenModelica.Scripting.Internal.Time.RT_CLOCK_USER_RESERVED);
-      referenceCell := \"<td bgcolor=\\\"#FF0000\\\">\"+OpenModelica.Scripting.Internal.Time.readableTime(timeDiff)+\", <a href=\\\"files/"+s+".diff.html\\\">\"+String(size(diffFiles,1))+\"/\"+String(numCompared)+\" signals failed</a></td>\";
-      writeFile(\"files/"+s+".diff.html\",\"<html><body><h1>"+s+" differences from the reference file</h1><p>startTime: \"+String(startTime)+\"</p><p>stopTime: \"+String(stopTime)+\"</p><p>Simulated using tolerance: \"+String(tolerance)+\"</p><ul>\" + sum(\"<li>\"+csvFileToVariable(file)+\" <a href=\\\"\"+OpenModelica.Scripting.basename(file)+\".html\\\">(javascript)</a> <a href=\\\"\"+OpenModelica.Scripting.basename(file)+\".csv\\\">(csv)</a></li>\" for file in diffFiles) + \"</ul></body></html>\");
+      referenceCell := \"<td bgcolor=\\\"#FF0000\\\">\"+OpenModelica.Scripting.Internal.Time.readableTime(timeDiff)+\", <a href=\\\""+s+".diff.html\\\">\"+String(size(diffFiles,1))+\"/\"+String(numCompared)+\" signals failed</a></td>\";
+      writeFile(\"report/"+s+".diff.html\",\"<html><body><h1>"+s+" differences from the reference file</h1><p>startTime: \"+String(startTime)+\"</p><p>stopTime: \"+String(stopTime)+\"</p><p>Simulated using tolerance: \"+String(tolerance)+\"</p><ul>\" + sum(\"<li>\"+csvFileToVariable(file)+\" <a href=\\\"\"+OpenModelica.Scripting.basename(file)+\".html\\\">(javascript)</a> <a href=\\\"\"+OpenModelica.Scripting.basename(file)+\".csv\\\">(csv)</a></li>\" for file in diffFiles) + \"</ul></body></html>\");
       {writeFile(prefix + \".\" + var + \".html\",\"<html>
 <head>
 <script type=\\\"text/javascript\\\" src=\\\"dygraph-combined.js\\\"></script>
@@ -414,8 +411,8 @@ function change(el) {
 end if;
 
 sim:=readFile(simFile);
-str:=\"<tr><td>\" + (if err <> \"\" then \"<a class=\\\"\"+errorLinkClass+\"\\\" href=\\\"\"+errFile+\"\\\">"+s+"</a>\" else \""+s+"\") +
-  (if sim <> \"\" then \" (<a href=\\\"\"+simFile+\"\\\">sim</a>)\" else \"\") +
+str:=\"<tr><td>\" + (if err <> \"\" then \"<a class=\\\"\"+errorLinkClass+\"\\\" href=\\\""+s+".err\\\">"+s+"</a>\" else \""+s+"\") +
+  (if sim <> \"\" then \" (<a href=\\\""+s+".err\\\">sim</a>)\" else \"\") +
   \"</td>\" + referenceCell +
   cell(if simRes then timeSim else -1.0,greenOnOk=true,greenColor=greenColor,mdFile=mdFile) +
   \"<td bgcolor=\\\"\"+(if res[1]<>\"\" then greenColor else \"#FF0000\")+\"\\\">\"+OpenModelica.Scripting.Internal.Time.readableTime(total)+\"</td>\" +
@@ -434,8 +431,8 @@ writeFile(statFile + \".verify\", str);getErrorString();
 getErrorString();
 if javascript then
   system("python " + OpenModelica.Scripting.getInstallationDirectoryPath() + "/share/doc/omc/testmodels/generate_icons.py Modelica.Icons.Example");
-  system("cp ModelicaIcons/Modelica.Icons.Example.svg files/");
-  system("cp -a " + OpenModelica.Scripting.getInstallationDirectoryPath() + "/lib/omc/emcc/mdpad/* files/");
+  system("cp ModelicaIcons/Modelica.Icons.Example.svg report/");
+  system("cp -a " + OpenModelica.Scripting.getInstallationDirectoryPath() + "/lib/omc/emcc/mdpad/* report/");
 end if;
 print("Running tests...\n");
 results := system_parallel({omc + " +n=1 " + s + ".mos" for s in classesToRun});
@@ -443,11 +440,11 @@ results := system_parallel({omc + " +n=1 " + s + ".mos" for s in classesToRun});
 print(getErrorString());
 
 print("Creating HTML report...\n");
-system(removeFileComm+log);
+system(removeFileComm+logFile);
 nsucceeded := String(sum(if OpenModelica.Scripting.regularFileExists(s + ".exe") then 1 else 0 for s in classesToRun)) + "/" + String(size(classesToRun,1));
 nsimsucceeded := String(sum(if OpenModelica.Scripting.regularFileExists(s + ".simsuccess") then 1 else 0 for s in classesToRun)) + "/" + String(size(classesToRun,1));
 nverifysucceeded := String(sum(if OpenModelica.Scripting.regularFileExists(s + ".verifysuccess") then 1 else 0 for s in classesToRun)) + "/" + String(size(classesToRun,1));
-str:="<h1>Recursive BuildModel Test</h1>
+str:="<h1>Testing Report</h1>
 <p>BuildModel Results: " + nsucceeded + " succeeded</p>
 <p>Simulation Results: " + nsimsucceeded + " succeeded</p>"+(if referenceFiles<> "" then "
 <p>Verified Results: " + nverifysucceeded + " succeeded</p>" else "")+"
@@ -465,7 +462,7 @@ str:="<h1>Recursive BuildModel Test</h1>
 
 
 // Write new BuildModelRecursive HTML log file
-writeFile(log,"<html>
+writeFile(logFile,"<html>
 <head>
 <title>BuildModel Results</title>
 <style>
@@ -473,20 +470,20 @@ a.messagesError {color:#FF0000;}
 a.messagesWarning {color:#FFCC66;}
 </style>
 </head><body>" + str);
-writeFile(log,"<table border=\"1\"><tr><th>Model</th>"+(if referenceFiles == "" then "" else "<th>Verified</th>")+"<th>Simulate</th><th>Total buildModel</th><th>Frontend</th><th>Backend</th><th>SimCode</th><th>Templates</th><th>Compile</th></tr>\n",append=true);getErrorString();
-writeFile(log,sum(readFile(s + ".stat") + "\n" for s in classesToRun),append=true);getErrorString();
-writeFile(log,"</table><hr /><p><a href=\"BuildModelRecursive.tar.gz\">Offline version</a></p></body></html>",append=true);getErrorString();
-writeFile("files/" + typeNameString(ModelicaLibrary) + ".classes",sum(typeNameString(c) + "\n" for c in getClassNames(ModelicaLibrary, recursive=true)));
+writeFile(logFile,"<table border=\"1\"><tr><th>Model</th>"+(if referenceFiles == "" then "" else "<th>Verified</th>")+"<th>Simulate</th><th>Total buildModel</th><th>Frontend</th><th>Backend</th><th>SimCode</th><th>Templates</th><th>Compile</th></tr>\n",append=true);getErrorString();
+writeFile(logFile,sum(readFile(s + ".stat") + "\n" for s in classesToRun),append=true);getErrorString();
+writeFile(logFile,"</table><hr /><p><a href=\"BuildModelRecursive.tar.gz\">Offline version</a></p></body></html>",append=true);getErrorString();
+writeFile("report/" + typeNameString(testClassNames) + ".classes", sum(c + "\n" for c in classesToRun));
 
 {writeFile("BuildModelRecursive." + phase + ".xml", "<testsuite>\n" + sum(readFile(s + ".stat." + phase) for s in classesToRun) + "</testsuite>\n") for phase in {"flat","compile","sim","verify"}};getErrorString();
 // {system("iconv -f utf8 -t utf8 -c BuildModelRecursive." + phase + ".xml.tmp -o BuildModelRecursive." + phase + ".xml") for phase in {"flat","compile","sim","verify"}};getErrorString();
 
-system("cp '" + dygraphs + "' files/");getErrorString();
-// system(removeFileComm+"tidy.err; for f in files/*.err; do (grep -v 'Duplicate modification of element' $f | sed s,^.*omlibrary/,[, | grep -v 'Error building simulator' | grep -v 'has no value, and is fixed during initialization' | grep -5E '(Warning|Error|Notification):' > tmp.tidy && test -s tmp.tidy && (basename $f && cat tmp.tidy)) >> tidy.err; done");
-// system("chmod -R go+r BuildModelRecursive.html files tidy.err");getErrorString();
-// system("chmod go+x files");getErrorString();
-system("tar czf BuildModelRecursive.tar.gz BuildModelRecursive.html files");getErrorString();
-// system("tar czf BuildModelRecursive.tar.gz BuildModelRecursive.html files tidy.err");getErrorString();
+system("cp '" + dygraphs + "' report/");getErrorString();
+// system(removeFileComm+"tidy.err; for f in report/*.err; do (grep -v 'Duplicate modification of element' $f | sed s,^.*omlibrary/,[, | grep -v 'Error building simulator' | grep -v 'has no value, and is fixed during initialization' | grep -5E '(Warning|Error|Notification):' > tmp.tidy && test -s tmp.tidy && (basename $f && cat tmp.tidy)) >> tidy.err; done");
+// system("chmod -R go+r BuildModelRecursive.html report tidy.err");getErrorString();
+// system("chmod go+x report");getErrorString();
+system("tar czf BuildModelRecursive.tar.gz "+logFile+" report");getErrorString();
+// system("tar czf BuildModelRecursive.tar.gz BuildModelRecursive.html report tidy.err");getErrorString();
 // system("chmod go+r BuildModelRecursive.tar.gz");
 
 
@@ -516,7 +513,7 @@ referenceFileExtension:="csv";
 referenceFileNameDelimiter:="/";
 referenceFiles:="/path/to/RegressionTesting/ModelicaStandardLibrary/ReferenceResults/v3.2.1+build.2.release/";
 outputFormat:="csv";
-customLibrary:=true;
+customModelicaLibrary:=true;
 ModelicaLibrary:=$TypeName(Modelica);
 ModelicaLibraryVersion:="default";
 mslRegressionOutput:="OpenModelica"; // Creates files under ./OpenModelica

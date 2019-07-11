@@ -3,7 +3,6 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                sh 'cd CI'
                 sh '/c/OpenModelica/bin/omc -g=MetaModelica CI/BuildModelRecursive.mos'
             }
         }
@@ -11,7 +10,7 @@ pipeline {
     post {
         always {
             echo 'Run: DONE'
-            archiveArtifacts artifacts: 'CI/workdir/BuildModelRecursive.html, CI/workdir/files', onlyIfSuccessful: false
+            archiveArtifacts artifacts: 'CI/workdir/report/*'
         }
         success {
             echo 'Run: SUCCESS'
