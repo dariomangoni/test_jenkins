@@ -1,20 +1,18 @@
 // Note: Run with -g=MetaModelica
 // Some examples of CustomCommands.mos files are at the bottom of this file
-echo(true);
+echo(false);
 
 buildOnWindows:=true;
 if buildOnWindows then
   removeDirComm:="rd /s /q ";
   removeFileComm:="del /f ";
   touchComm:="type nul > ";
-  dateComm:="date /t ";
-  timeComm:="time /t ";
+  startScript:="";
 else
   removeDirComm:="rm -rf ";
   removeFileComm:="rm -f ";
   touchComm:="touch ";
-  dateComm:="date /t ";
-  timeComm:="time /t ";
+  startScript:="./";
 end if;
 
 
@@ -23,10 +21,10 @@ configure := settings.CONFIGURE_CMDLINE;
 onlyExperiments := false;
 system(removeDirComm+ "CI/workdir");
 system("mkdir CI/workdir");
-print("Current dir is "+cd());
+print("Current dir is "+cd()+"\n");
 currentDir:=cd();
 cd(currentDir+"/CI/workdir");
-print("Current dir is "+cd());
+print("Working directory: "+cd()+"\n");
 
 customCommandsPath:="../CustomCommands.mos";
 if 0 == system("lsb_release -ds > lsb.release") then
@@ -92,7 +90,6 @@ reference_reltolDiffMinMax:=3e-3;
 reference_rangeDelta:=1e-3;
 
 print("Loading Modelica library...\n");
-print(typeNameString(ModelicaLibrary));
 loadModel(ModelicaLibrary,{ModelicaLibraryVersion});
 ModelicaLibraryVersionRevision:=getVersion(ModelicaLibrary);
 libraryLastChange:="";
@@ -132,14 +129,20 @@ classesToRun:={typeNameString(x) for x guard isExperiment(x) in getClassNames(cl
 getErrorString();
 
 // writeFile("x",sum(s + "\n" for s in classesToRun));
-print("Tests to be run ("+ String(size(classesToRun,1))+"): \n"+ sum(s + "\n" for s in classesToRun));
+print("Tests to be run ("+ String(size(classesToRun,1))+"): \n"+ sum("- " + s + "\n" for s in classesToRun));
 
 print("Creating MOS file for each test...\n");
 
-system("date /t > tmp.date");
-system("time /t >> tmp.date");
-dateAndTime:=readFile("tmp.date");
-system(removeFileComm+"tmp.date");
+if buildOnWindows then
+  system("date /t > tmp.date");
+  system("time /t >> tmp.date");
+  dateAndTime:=readFile("tmp.date");
+  system(removeFileComm+"tmp.date");
+else
+  system("date +'%Y-%m-%d %H:%M:%S' > tmp.date");
+  dateAndTime:=readFile("tmp.date");
+  system("rm -f tmp.date");
+end if;
 
 loadModelCommand:="\n"+customCommands+"\nloadModel("+ModelicaLibraryString+",{\""+ModelicaLibraryVersion+"\"});\n";
 loadAdditionalLibraryCommand:=sum("\nloadFile(\""+myLib+"\");getErrorString();\n" for myLib in additionalLibraries);
@@ -294,7 +297,7 @@ timeDiff := -1.0;
 
 OpenModelica.Scripting.Internal.Time.timerTick(OpenModelica.Scripting.Internal.Time.RT_CLOCK_USER_RESERVED);
 buildRes := res[1] <> \"\";
-simRes  := if not buildRes then false else 0 == system(\""+s+" \"+simFlags+emit_protected+\" > \"+simFile+\" 2>&1\");
+simRes  := if not buildRes then false else 0 == system(\""+startScript+s+" \"+simFlags+emit_protected+\" > \"+simFile+\" 2>&1\");
 if buildRes and javascript then
   system(\"cp " + s + ".js " + s + "_info.xml " + s + "_init.xml " + s + ".md files/\");
 end if;
@@ -488,8 +491,15 @@ system("tar czf BuildModelRecursive.tar.gz BuildModelRecursive.html files");getE
 
 
 if (sum(if OpenModelica.Scripting.regularFileExists(s + ".simsuccess") then 1 else 0 for s in classesToRun) == size(classesToRun,1)) then
+  print("All tests successfully run.\n");
   exit(0);
 else
+  print("Some tests did not properly run:\n");
+  for s in classesToRun loop
+    if not OpenModelica.Scripting.regularFileExists(s + ".simsuccess") then
+      print("- "+s+"\n");
+    end if;
+  end for;
   exit(1);
 end if;
 
