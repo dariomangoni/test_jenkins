@@ -23,9 +23,10 @@ configure := settings.CONFIGURE_CMDLINE;
 onlyExperiments := false;
 system(removeDirComm+ "CI/workdir");
 system("mkdir CI/workdir");
-print("Current dir is "+cd(""));
-cd("CI/workdir");
-print("Current dir is "+cd(""));
+print("Current dir is "+cd());
+currentDir:=cd();
+cd(currentDir+"/CI/workdir");
+print("Current dir is "+cd());
 
 customCommandsPath:="../CustomCommands.mos";
 if 0 == system("lsb_release -ds > lsb.release") then
