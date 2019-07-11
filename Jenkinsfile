@@ -11,7 +11,7 @@ pipeline {
     post {
         always {
             echo 'Run: DONE'
-            archiveArtifacts artifacts: 'CI/workdir/BuildModelRecursive.html', onlyIfSuccessful: false
+            archiveArtifacts artifacts: 'CI/workdir/BuildModelRecursive.html, CI/workdir/files', onlyIfSuccessful: false
         }
         success {
             echo 'Run: SUCCESS'
